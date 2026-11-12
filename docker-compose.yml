@@ -1,0 +1,66 @@
+services:
+  # 1. Baza danych MySQL
+  mysql-container:
+    image: mysql:8.0
+    container_name: mysql-container
+    environment:
+      MYSQL_ROOT_PASSWORD: twoje_super_haslo
+      MYSQL_DATABASE: autoDetektyw
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: always
+
+  # 2. Silnik Ollama
+  ollama-container:
+    image: ollama/ollama:latest
+    container_name: ollama-container
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: always
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      
+     # 2b. Jednorazowe pobranie modelu
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: ollama-pull
+    depends_on:
+      ollama-container:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama-container:11434
+    entrypoint: ["ollama", "pull", "llama3.1"]
+    restart: "no"
+  # 3. Aplikacja FastAPI + ResNet50
+  fastapi-app:
+    build: .
+    container_name: fastapi-app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql-container
+      - ollama-container
+    restart: always
+
+  # 4. NOWOŚĆ: Twoja aplikacja React
+  react-frontend:
+    build:
+      context: ./atlasusproject  # Ścieżka do folderu z Reactem
+    container_name: react-frontend
+    ports:
+      - "5173:5173"  # Wystawiamy port strony na Twój komputer Windows
+    depends_on:
+      - fastapi-app
+    restart: always
+
+volumes:
+  mysql_data:
+  ollama_data:
